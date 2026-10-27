@@ -17,7 +17,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
     .maybeSingle<PostRow>();
   if (!post) notFound();
 
-  const [{ data: captions }, { data: author }, { count: voteCount }] = await Promise.all([
+  const [{ data: captions }, { data: author }, { count: voteCount }, { data: requests }] = await Promise.all([
     db
       .from("captions")
       .select("id, post_id, text, style, model, prompt, upvotes, downvotes, score, created_at")
@@ -26,6 +26,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
       .order("id"),
     db.from("profiles").select("first_name, last_name, email").eq("id", post.user_id).maybeSingle(),
     db.from("votes").select("id, captions!inner(post_id)", { count: "exact", head: true }).eq("captions.post_id", post.id),
+    db.from("generation_requests").select("id, status, created_at").eq("post_id", post.id).order("created_at"),
   ]);
   const caps = (captions ?? []) as CaptionRow[];
   const prompts = [...new Set(caps.map((c) => c.prompt))];
@@ -67,6 +68,19 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
               <GenerateMoreButton postId={post.id} />
             </div>
           </Card>
+          {requests && requests.length > 0 && (
+            <Card title="Generation requests" subtitle="Every LLM call behind these captions">
+              <ul className="flex flex-wrap gap-2 text-sm">
+                {requests.map((r) => (
+                  <li key={r.id}>
+                    <Link href={`/requests/${r.id}`} className="hover:underline">
+                      #{r.id} · {r.status} · {formatDate(r.created_at)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           <Card title="Prompt sent to the AI" subtitle={prompts.length > 1 ? `${prompts.length} different prompts used` : undefined}>
             {prompts.map((p) => (
               <pre key={p} className="mb-2 max-h-64 overflow-auto rounded-lg bg-[var(--neutral)] p-3 text-xs whitespace-pre-wrap">{p}</pre>

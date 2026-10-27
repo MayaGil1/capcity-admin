@@ -3,9 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
-import { buildPrompt, generateCaptions } from "@/lib/gemini";
+import { attachPostToRequest, runCaptionPipeline, type GeneratedCaption } from "@/lib/pipeline";
 
 export type ActionState = { error?: string; success?: string };
+
+const captionRows = (postId: number, requestId: number, captions: GeneratedCaption[]) =>
+  captions.map((c) => ({
+    post_id: postId,
+    text: c.text,
+    style: c.style,
+    prompt: c.prompt,
+    model: c.model,
+    prompt_chain_id: c.prompt_chain_id,
+    generation_request_id: requestId,
+  }));
 
 const clean = (formData: FormData, field: string, max = 300) =>
   String(formData.get(field) ?? "").trim().slice(0, max);
@@ -20,14 +31,20 @@ export async function createPost(imagePath: string, theme: string, note: string)
 
   const cleanTheme = theme.trim().slice(0, 60) || "Admin post";
   const cleanNote = note.trim().slice(0, 200) || null;
-  const prompt = buildPrompt(cleanTheme, cleanNote);
 
   let result;
   try {
-    result = await generateCaptions({ data: await file.arrayBuffer(), mimeType: file.type || "image/jpeg" }, prompt);
+    result = await runCaptionPipeline(db, {
+      userId: user.id,
+      imagePath,
+      image: { data: await file.arrayBuffer(), mimeType: file.type || "image/jpeg" },
+      theme: cleanTheme,
+      note: cleanNote,
+      source: "admin",
+    });
   } catch (error) {
     console.error(error);
-    return { error: "Gemini couldn't caption that photo. Try again or use another one." };
+    return { error: "The AI couldn't caption that photo. Check Generation requests for the reason." };
   }
 
   const { data: { publicUrl } } = db.storage.from("posts").getPublicUrl(imagePath);
@@ -38,13 +55,12 @@ export async function createPost(imagePath: string, theme: string, note: string)
     .single();
   if (postError || !post) return { error: postError?.message ?? "Could not save the post." };
 
-  const { error: captionError } = await db.from("captions").insert(
-    result.captions.map((c) => ({ post_id: post.id, text: c.text, style: c.style, prompt, model: result.model })),
-  );
+  const { error: captionError } = await db.from("captions").insert(captionRows(post.id, result.requestId, result.captions));
   if (captionError) {
     await db.from("posts").delete().eq("id", post.id);
     return { error: captionError.message };
   }
+  await attachPostToRequest(db, result.requestId, post.id);
 
   revalidatePath("/", "layout");
   redirect(`/posts/${post.id}`);
@@ -78,23 +94,28 @@ export async function updateCaption(captionId: number, _prev: ActionState, formD
 
 // CREATE more AI captions for an existing photo.
 export async function generateMoreCaptions(postId: number): Promise<ActionState> {
-  const { db } = await requireAdmin();
+  const { user, db } = await requireAdmin();
   const { data: post } = await db.from("posts").select("image_path, theme, note").eq("id", postId).single();
   if (!post) return { error: "Post not found." };
 
   const { data: file } = await db.storage.from("posts").download(post.image_path);
   if (!file) return { error: "Could not read the photo." };
 
-  const prompt = buildPrompt(post.theme, post.note);
   try {
-    const result = await generateCaptions({ data: await file.arrayBuffer(), mimeType: file.type || "image/jpeg" }, prompt);
-    const { error } = await db.from("captions").insert(
-      result.captions.map((c) => ({ post_id: postId, text: c.text, style: c.style, prompt, model: result.model })),
-    );
+    const result = await runCaptionPipeline(db, {
+      userId: user.id,
+      imagePath: post.image_path,
+      image: { data: await file.arrayBuffer(), mimeType: file.type || "image/jpeg" },
+      theme: post.theme,
+      note: post.note,
+      source: "admin",
+      postId,
+    });
+    const { error } = await db.from("captions").insert(captionRows(postId, result.requestId, result.captions));
     if (error) return { error: error.message };
   } catch (error) {
     console.error(error);
-    return { error: "Gemini is busy right now. Try again in a moment." };
+    return { error: "The AI couldn't write captions. Check Generation requests for the reason." };
   }
   revalidatePath("/", "layout");
   return { success: "Added new captions." };

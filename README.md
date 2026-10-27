@@ -23,3 +23,19 @@ as the database owner and bypasses RLS, so the project owner sets the flag direc
 ## Environment variables
 
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY` (see `.env.example`).
+
+## Week 7: AI pipeline observability
+
+CapCity's caption generator is now configured by database tables and logs every model call
+(run `supabase/observability.sql` from the CapCity repo once). In the admin panel:
+
+| Page | What you can do |
+|---|---|
+| Users | read profiles |
+| Prompt chains | read chains and their steps (model, prompts, temperature); update the mix (captions per post from each chain) |
+| Generation requests | read every caption request with status, timing and errors; open one to see all its LLM calls |
+| LLM responses | read every model call: prompts sent, raw response, HTTP status, duration |
+| Terms, Examples | create/read/update/delete the slang glossary and example captions injected into the prompt |
+| LLM models, LLM providers | create/read/update/delete; inactive models are skipped, overloaded models fall back to other active models from the same provider |
+| Signup domains, Whitelisted emails | create/read/update/delete who may sign in to CapCity (both empty = open to everyone) |
+| AI media | read/view AI captions; create (upload), update and delete images |
