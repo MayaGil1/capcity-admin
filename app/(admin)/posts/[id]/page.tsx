@@ -6,6 +6,9 @@ import type { CaptionRow, PostRow } from "@/lib/data";
 import { formatDate } from "@/lib/data";
 import { CaptionEditor, DeletePostButton, GenerateMoreButton, PostEditor } from "./editors";
 
+// Caption generation runs inside this page's server action; give slow AI calls room to retry.
+export const maxDuration = 300;
+
 export default async function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { db } = await requireAdmin();
   const { id } = await params;

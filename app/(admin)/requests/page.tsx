@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { StatTile } from "@/components/charts";
-import StatusBadge from "@/components/StatusBadge";
+import StatusBadge, { effectiveStatus } from "@/components/StatusBadge";
 import { PageHeader, TableWrap, td, th } from "@/components/ui";
 import { displayName, requireAdmin } from "@/lib/admin";
 import { formatDate } from "@/lib/data";
@@ -31,7 +31,11 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
     .select("id, user_id, post_id, theme, source, status, error, caption_count, duration_ms, created_at, profiles(first_name, last_name, email)")
     .order("created_at", { ascending: false })
     .limit(500);
-  const all = (data ?? []) as unknown as RequestRow[];
+  const all = ((data ?? []) as unknown as RequestRow[]).map((r) => ({
+    ...r,
+    status: effectiveStatus(r.status, r.created_at) === "stalled" ? "failed" : r.status,
+    error: effectiveStatus(r.status, r.created_at) === "stalled" ? "Timed out before finishing" : r.error,
+  }));
   const rows = status === "all" ? all : all.filter((r) => r.status === status);
 
   const done = all.filter((r) => r.status !== "running");

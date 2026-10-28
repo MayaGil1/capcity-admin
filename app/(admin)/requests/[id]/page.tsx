@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/charts";
 import ResponseCard, { RESPONSE_SELECT, type ResponseRow } from "@/components/ResponseCard";
-import StatusBadge from "@/components/StatusBadge";
+import StatusBadge, { effectiveStatus } from "@/components/StatusBadge";
 import { displayName, requireAdmin } from "@/lib/admin";
 import { formatDate } from "@/lib/data";
 
@@ -33,7 +33,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
       </Link>
       <div className="mt-3 mb-6 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Request #{request.id}</h1>
-        <StatusBadge status={request.status} />
+        <StatusBadge status={effectiveStatus(request.status, request.created_at)} />
       </div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <div className="flex flex-col gap-4">

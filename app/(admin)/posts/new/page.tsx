@@ -4,6 +4,9 @@ import { requireAdmin } from "@/lib/admin";
 import { themeForDate } from "@/lib/themes";
 import NewPostForm from "./NewPostForm";
 
+// Caption generation runs inside this page's server action; give slow AI calls room to retry.
+export const maxDuration = 300;
+
 export default async function NewPostPage() {
   const { user } = await requireAdmin();
   return (
